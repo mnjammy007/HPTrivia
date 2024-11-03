@@ -9,11 +9,15 @@ import SwiftUI
 import AVKit
 
 struct ContentView: View {
+    @EnvironmentObject private var store: Store
+    @EnvironmentObject private var game: Game
     @State private var audioPlayer: AVAudioPlayer!
     @State private var isPlayButtonScaling = false
     @State private var isBgImageMoving = false
     @State private var areViewsAnimatingIn = false
     @State var isInstructionSheetPresented = false
+    @State var isSettingsSheetPresented = false
+    @State var isPlayGameSheetPresented = false
     
     
     var body: some View {
@@ -55,9 +59,9 @@ struct ContentView: View {
                             VStack {
                                 Text("Recent Scores")
                                     .font(.title2)
-                                Text("33")
-                                Text("22")
-                                Text("11")
+                                Text("\(game.recentScores[0])")
+                                Text("\(game.recentScores[1])")
+                                Text("\(game.recentScores[2])")
                             }
                             .font(.title3)
                             .padding(.horizontal)
@@ -89,14 +93,16 @@ struct ContentView: View {
                         VStack {
                             if areViewsAnimatingIn{
                                 Button {
-                                    //                            play
+                                    filterQuestions()
+                                    game.startGame()
+                                    isPlayGameSheetPresented.toggle()
                                 } label: {
                                     Text("Play")
                                         .font(.largeTitle)
                                         .foregroundColor(.white)
                                         .padding(.vertical, 7)
                                         .padding(.horizontal, 50)
-                                        .background(.brown)
+                                        .background(store.books.contains(.active) ? .brown : .gray)
                                         .cornerRadius(7)
                                         .shadow(radius: 5)
                                 }
@@ -107,6 +113,7 @@ struct ContentView: View {
                                     }
                                 }
                                 .transition(.offset(y: geo.size.height/3))
+                                .disabled(store.books.contains(.active) ? false : true)
                             }
                         }
                         .animation(.easeOut(duration: 0.7).delay(2), value: areViewsAnimatingIn)
@@ -114,7 +121,7 @@ struct ContentView: View {
                         VStack {
                             if areViewsAnimatingIn{
                                 Button {
-                                    //                            Show setting sceen/sheet
+                                    isSettingsSheetPresented.toggle()
                                 } label: {
                                     Image(systemName: "gearshape.fill")
                                         .font(.largeTitle)
@@ -129,6 +136,16 @@ struct ContentView: View {
                         
                     }
                     .frame(width: geo.size.width)
+                    VStack {
+                        if areViewsAnimatingIn && store.books.contains(.active) == false{
+                            Text("No questions available. Go to settings. ⬆️")
+                                .multilineTextAlignment(.center)
+                                .padding(.top)
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut.delay(3), value: areViewsAnimatingIn)
+                    
                     Spacer()
                 }
             }
@@ -137,10 +154,24 @@ struct ContentView: View {
         .ignoresSafeArea()
         .onAppear{
             areViewsAnimatingIn = true
-//            playAudio()
+            playAudio()
         }
         .sheet(isPresented: $isInstructionSheetPresented) {
-            GameInstructions()
+            Instructions()
+        }
+        .fullScreenCover(isPresented: $isPlayGameSheetPresented, content: {
+            GamePlay()
+                .environmentObject(game)
+                .onAppear{
+                    audioPlayer.setVolume(0, fadeDuration: 2)
+                }
+            onDisappear{
+                audioPlayer.setVolume(1, fadeDuration: 3)
+            }
+        })
+        .sheet(isPresented: $isSettingsSheetPresented) {
+            Settings()
+                .environmentObject(store)
         }
     }
     
@@ -150,8 +181,21 @@ struct ContentView: View {
         audioPlayer.numberOfLoops = -1
         audioPlayer.play()
     }
+    
+    private func filterQuestions() {
+        var books: [Int] = []
+        for (index, status) in store.books.enumerated(){
+            if status == .active{
+                books.append(index+1)
+            }
+        }
+        game.filterQuestions(to: books)
+        game.newQuestion()
+    }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(Store())
+        .environmentObject(Game())
 }
